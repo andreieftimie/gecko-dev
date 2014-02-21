@@ -6,16 +6,20 @@
 
 import ConfigParser
 import mozinfo
+import mozversion
+import mozfile
 import optparse
 import os
 import platform
 import subprocess
 import sys
+import tempfile
 
 if mozinfo.isMac:
     from plistlib import readPlist
 
 from mozprofile import Profile, FirefoxProfile, MetroFirefoxProfile, ThunderbirdProfile, MozProfileCLI
+from mozprocess.processhandler import ProcessHandler
 
 from .base import Runner
 from .utils import findInPath, get_metadata_from_egg
@@ -195,8 +199,14 @@ class MetroFirefoxRunner(LocalRunner):
     immersiveHelperPath = os.path.sep.join([here,
                                             'resources',
                                             'metrotestharness.exe'])
+    defaultSetterPath = os.path.sep.join([here,
+                                          'resources',
+                                          'firefoxdefault_' + str(mozinfo.bits) + '.exe'])
+    defaultSetterFile = mozfile.NamedTemporaryFile(delete=False).name
 
     def __init__(self, profile, binary=None, **kwargs):
+        if not mozinfo.isWin and float(mozinfo.version.rsplit('.', 1)[0]) >= 6.1:
+            raise Exception('Firefox Metro mode is only supported on Windows 8 and upwards')
 
         # if no binary given take it from the BROWSER_PATH environment variable
         binary = binary or os.environ.get('BROWSER_PATH')
@@ -205,8 +215,25 @@ class MetroFirefoxRunner(LocalRunner):
         if not os.path.exists(self.immersiveHelperPath):
             raise OSError('Can not find Metro launcher: %s' % self.immersiveHelperPath)
 
-        if not mozinfo.isWin:
-            raise Exception('Firefox Metro mode is only supported on Windows 8 and onwards')
+    def start(self, debug_args=None, interactive=False, timeout=None, outputTimeout=None):
+        code_name = mozversion.get_version(self.binary).get('application_code_name') or \
+                    mozversion.get_version(self.binary).get('application_name')
+        process = ProcessHandler([self.defaultSetterPath, code_name, self.defaultSetterFile])
+        process.run(timeout=60)
+        if process.wait() != 0:
+            raise Exception('Failed to set Firefox as default browser')
+
+        LocalRunner.start(self, debug_args, interactive, timeout, outputTimeout)
+
+    def cleanup(self):
+        if os.path.exists(self.defaultSetterFile):
+            process = ProcessHandler([self.defaultSetterPath, self.defaultSetterFile])
+            process.run(timeout=60)
+            if process.wait() != 0:
+                raise Exception('Failed to remove Firefox as default')
+            mozfile.remove(self.defaultSetterFile)
+
+        LocalRunner.cleanup(self)
 
     @property
     def command(self):

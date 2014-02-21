@@ -17,6 +17,7 @@ deps = ['mozcrash >= 0.11',
         'mozlog >= 1.5',
         'mozprocess >= 0.17',
         'mozprofile >= 0.18',
+        'mozversion >= 0.2',
        ]
 
 # we only support python 2 right now
@@ -41,7 +42,9 @@ setup(name=PACKAGE_NAME,
       license='MPL 2.0',
       packages=['mozrunner'],
       package_data={'mozrunner': [
-            'resources/metrotestharness.exe'
+            'resources/metrotestharness.exe',
+            'resources/firefoxdefault_32.exe',
+            'resources/firefoxdefault_64.exe'
       ]},
       zip_safe=False,
       install_requires = deps,
